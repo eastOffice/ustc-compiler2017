@@ -1,0 +1,13 @@
+void main()
+{
+    const k = 10;
+    int i = 1
+    if j!=i
+        j = i + 1
+    else if j == i
+        i - 1
+    while j < 5 
+        i * 5
+        i % 10
+     _hex = 0x12
+}
