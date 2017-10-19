@@ -20,9 +20,7 @@ vardef:
 funcdef: 
     Void Identifier LeftParen RightParen block;
 block: 
-    LeftBrace blockitem* RightBrace;
-blockitem:
-    decl | stmt;
+    LeftBrace (decl|stmt)* RightBrace;
 stmt: 
     lval Assign exp SemiColon
     |Identifier LeftParen RightParen SemiColon
@@ -32,17 +30,11 @@ stmt:
     |SemiColon;
 lval: 
     Identifier | Identifier LeftBracket exp RightBracket;
-relop:
-    Equal | NonEqual | Less | Greater | LessEqual | GreaterEqual;
-binop:
-    Plus | Minus | Multiply | Divide | Modulo;
-unaryop:
-    Plus | Minus;
 cond: 
-    exp relop exp;
+    exp (Equal | NonEqual | Less | Greater | LessEqual | GreaterEqual) exp;
 exp:
-    exp binop exp
-    | unaryop exp
+    exp (Plus | Minus | Multiply | Divide | Modulo) exp
+    | (Plus | Minus) exp
     | LeftParen exp RightParen
     | lval
     | Number

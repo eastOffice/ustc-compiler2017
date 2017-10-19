@@ -87,16 +87,6 @@ public interface C1ParserListener extends ParseTreeListener {
 	 */
 	void exitBlock(C1Parser.BlockContext ctx);
 	/**
-	 * Enter a parse tree produced by {@link C1Parser#blockitem}.
-	 * @param ctx the parse tree
-	 */
-	void enterBlockitem(C1Parser.BlockitemContext ctx);
-	/**
-	 * Exit a parse tree produced by {@link C1Parser#blockitem}.
-	 * @param ctx the parse tree
-	 */
-	void exitBlockitem(C1Parser.BlockitemContext ctx);
-	/**
 	 * Enter a parse tree produced by {@link C1Parser#stmt}.
 	 * @param ctx the parse tree
 	 */
@@ -116,36 +106,6 @@ public interface C1ParserListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitLval(C1Parser.LvalContext ctx);
-	/**
-	 * Enter a parse tree produced by {@link C1Parser#relop}.
-	 * @param ctx the parse tree
-	 */
-	void enterRelop(C1Parser.RelopContext ctx);
-	/**
-	 * Exit a parse tree produced by {@link C1Parser#relop}.
-	 * @param ctx the parse tree
-	 */
-	void exitRelop(C1Parser.RelopContext ctx);
-	/**
-	 * Enter a parse tree produced by {@link C1Parser#binop}.
-	 * @param ctx the parse tree
-	 */
-	void enterBinop(C1Parser.BinopContext ctx);
-	/**
-	 * Exit a parse tree produced by {@link C1Parser#binop}.
-	 * @param ctx the parse tree
-	 */
-	void exitBinop(C1Parser.BinopContext ctx);
-	/**
-	 * Enter a parse tree produced by {@link C1Parser#unaryop}.
-	 * @param ctx the parse tree
-	 */
-	void enterUnaryop(C1Parser.UnaryopContext ctx);
-	/**
-	 * Exit a parse tree produced by {@link C1Parser#unaryop}.
-	 * @param ctx the parse tree
-	 */
-	void exitUnaryop(C1Parser.UnaryopContext ctx);
 	/**
 	 * Enter a parse tree produced by {@link C1Parser#cond}.
 	 * @param ctx the parse tree
