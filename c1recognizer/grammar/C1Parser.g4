@@ -2,12 +2,11 @@ parser grammar C1Parser;
 options { tokenVocab = C1Lexer; }
 
 compilationUnit:
-    (decl | funcdef)
-    |compilationUnit (decl | funcdef);
+    (decl | funcdef)+;
 decl: 
     constdecl | vardecl;
 constdecl: 
-    Const Int constdef (Comma constdef)* SemiColon;
+    Const (Int)? constdef (Comma constdef)* SemiColon;
 constdef: 
     Identifier Assign exp 
     |Identifier LeftBracket exp? RightBracket Assign LeftBrace exp (Comma exp)* RightBrace;

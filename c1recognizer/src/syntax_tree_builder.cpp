@@ -9,46 +9,336 @@ syntax_tree_builder::syntax_tree_builder(error_reporter &_err) : err(_err) {}
 
 antlrcpp::Any syntax_tree_builder::visitCompilationUnit(C1Parser::CompilationUnitContext *ctx)
 {
+    auto result = new assembly;
+    result->line = 1;
+    result->pos = 0;
+    auto decls = ctx->decl();
+    auto funcdefs = ctx->funcdef();
+    int decls_i = 0, funcdefs_i = 0;
+    for(auto child : ctx->children)
+    {
+        if(antlrcpp::is<C1Parser::DeclContext *>(child))
+        {
+            auto decllist = visit(decls[decls_i++]).as<ptr_list<var_def_stmt_syntax > >();
+            for(int i = 0; i < decllist.size(); ++i)
+            {
+                result->global_defs.push_back(decllist[i]);
+            }
+        }
+        else if(antlrcpp::is<C1Parser::FuncdefContext *>(child))
+        {
+            ptr<global_def_syntax> temp;
+            temp.reset(visit(funcdefs[funcdefs_i++]).as<global_def_syntax *>());
+            result->global_defs.push_back(temp);
+        }
+    }
+    return static_cast<assembly *>(result);
 }
 
 antlrcpp::Any syntax_tree_builder::visitDecl(C1Parser::DeclContext *ctx)
 {
+//  constdecl | vardecl;
+    if(ctx->constdecl())
+        return visit(ctx->constdecl());
+    else if(ctx->vardecl())
+        return visit(ctx->vardecl());
 }
 
 antlrcpp::Any syntax_tree_builder::visitConstdecl(C1Parser::ConstdeclContext *ctx)
 {
+// Const (Int)? constdef (Comma constdef)* SemiColon;
+// give a warning if int is missing
+    int line = ctx->getStart()->getLine();
+    int pos = ctx->getStart()->getCharPositionInLine();
+    if(!ctx->Int())
+        err.warn(line, pos, ": 'int' is missing.");
+
+    ptr_list<var_def_stmt_syntax> result;
+    auto constdefs = ctx->constdef();
+    for(int i = 0; i < constdefs.size(); ++i)
+    {
+        ptr<var_def_stmt_syntax> temp;
+        temp.reset(visit(constdefs[i]).as<var_def_stmt_syntax *>());
+        result.push_back(temp);
+    }
+    return static_cast<ptr_list<var_def_stmt_syntax> >(result);
 }
 
 antlrcpp::Any syntax_tree_builder::visitConstdef(C1Parser::ConstdefContext *ctx)
 {
+    auto expressions = ctx->exp();
+    auto result = new var_def_stmt_syntax;
+    int comma_num = ctx->Comma().size();
+    int exp_num = expressions.size();
+    result->line = ctx->getStart()->getLine();
+    result->pos = ctx->getStart()->getCharPositionInLine();
+    result->is_constant = true;
+    result->name = std::string(ctx->Identifier()->getSymbol()->getText());
+    result->initializers.clear();
+    // Identifier Assign exp
+    if(!ctx->LeftBracket())
+    {
+        result->array_length.reset();
+        result->initializers.resize(1);
+        result->initializers[0].reset(visit(expressions[0]).as<expr_syntax *>());       
+    }
+    // Identifier LeftBracket exp RightBracket Assign LeftBrace exp (Comma exp)* RightBrace
+    else if(exp_num - 2 == comma_num)
+    {
+        result->array_length.reset(visit(expressions[0]).as<expr_syntax *>());
+        for(int i = 1; i < exp_num; ++i)
+        {
+            std::shared_ptr<expr_syntax> temp;
+            temp.reset(visit(expressions[i]).as<expr_syntax *>());
+            result->initializers.push_back(temp);
+        }
+    }
+    // Identifier LeftBracket  RightBracket Assign LeftBrace exp (Comma exp)* RightBrace    
+    else
+    {
+        if(comma_num == 0)
+            result->array_length.reset();
+        else
+        {
+            literal_syntax *temp = new literal_syntax;
+            temp->line = ctx->getStart()->getLine();
+            temp->pos = ctx->LeftBracket()->getSymbol()->getCharPositionInLine() + 1;
+            temp->number = comma_num + 1;
+            result->array_length.reset(temp);
+        }
+        for(int i = 0; i < exp_num; ++i)
+        {
+            std::shared_ptr<expr_syntax> temp;
+            temp.reset(visit(expressions[i]).as<expr_syntax *>());
+            result->initializers.push_back(temp);
+        }
+    }
+    return static_cast<var_def_stmt_syntax *>(result);
 }
 
 antlrcpp::Any syntax_tree_builder::visitVardecl(C1Parser::VardeclContext *ctx)
 {
+// Int vardef (Comma vardef)* SemiColon;
+    ptr_list<var_def_stmt_syntax> result;
+    auto vardefs = ctx->vardef();
+    for(int i = 0; i < vardefs.size(); ++i)
+    {
+        ptr<var_def_stmt_syntax> temp;
+        temp.reset(visit(vardefs[i]).as<var_def_stmt_syntax *>());
+        result.push_back(temp);
+    }
+    return static_cast<ptr_list<var_def_stmt_syntax> >(result);
 }
 
 antlrcpp::Any syntax_tree_builder::visitVardef(C1Parser::VardefContext *ctx)
 {
+    auto result = new var_def_stmt_syntax;
+    result->line = ctx->getStart()->getLine();
+    result->pos = ctx->getStart()->getCharPositionInLine();
+    result->is_constant = false;
+    result->name = std::string(ctx->Identifier()->getSymbol()->getText());
+    result->initializers.clear();
+    auto expressions = ctx->exp();
+    int comma_num = ctx->Comma().size(); 
+    int exp_num = expressions.size();
+    // Identifier | Indentifier Assign exp
+    if(!ctx->LeftBracket()) 
+    {
+        if(ctx->Assign())
+        {
+        result->array_length.reset();
+        result->initializers.resize(1);
+        result->initializers[0].reset(visit(expressions[0]).as<expr_syntax *>());
+        }
+        else
+        {
+            result->array_length.reset();
+            result->initializers.resize(1);
+            result->initializers[0].reset();
+        }
+    }
+    // Identifier LeftBracket exp RightBracket
+    else if(!ctx->LeftBrace())
+    {
+        result->array_length.reset(visit(expressions[0]).as<expr_syntax *>());
+        result->initializers.clear();
+    }
+    // Identifier LeftBracket exp RightBracket Assign LeftBrace exp (Comma exp)* RightBrace
+    else if(exp_num - 2 == comma_num)
+    {
+        result->array_length.reset(visit(expressions[0]).as<expr_syntax *>());
+        for(int i = 1; i < exp_num; ++i)
+        {
+            std::shared_ptr<expr_syntax> temp;
+            temp.reset(visit(expressions[i]).as<expr_syntax *>());
+            result->initializers.push_back(temp);
+        }
+    }
+    // Identifier LeftBracket RightBracket Assign LeftBrace exp (Comma exp)* RightBrace
+    else
+    {
+        if(comma_num == 0)
+            result->array_length.reset();
+        else
+        {
+            literal_syntax *temp = new literal_syntax;
+            temp->line = ctx->getStart()->getLine();
+            temp->pos = ctx->LeftBracket()->getSymbol()->getCharPositionInLine() + 1;
+            temp->number = comma_num + 1;
+            result->array_length.reset(temp);
+        }
+            
+        for(int i = 0; i < exp_num; ++i)
+        {
+            std::shared_ptr<expr_syntax> temp;
+            temp.reset(visit(expressions[i]).as<expr_syntax *>());
+            result->initializers.push_back(temp);
+        }
+    }
+    return static_cast<var_def_stmt_syntax *>(result);
 }
 
 antlrcpp::Any syntax_tree_builder::visitFuncdef(C1Parser::FuncdefContext *ctx)
 {
+// Void Identifier LeftParen RightParen block;
+    auto result = new func_def_syntax;
+    result->line = ctx->getStart()->getLine();
+    result->pos = ctx->getStart()->getCharPositionInLine();
+    auto indent = ctx->Identifier();
+    result->name = std::string(indent->getSymbol()->getText());
+    result->body.reset(visit(ctx->block()).as<block_syntax *>());
+    return static_cast<global_def_syntax *>(result);
 }
 
 antlrcpp::Any syntax_tree_builder::visitBlock(C1Parser::BlockContext *ctx)
 {
+// LeftBrace (decl|stmt)* RightBrace;
+    auto decls = ctx->decl();
+    auto stmts = ctx->stmt();
+    auto result = new block_syntax;
+    result->line = ctx->getStart()->getLine();
+    result->pos = ctx->getStart()->getCharPositionInLine();
+    result->body.clear();
+    int decls_i = 0, stmts_i = 0;
+    for(auto child : ctx->children)
+    {
+        std::shared_ptr<stmt_syntax> temp;
+        if(antlrcpp::is<C1Parser::DeclContext *>(child))
+        {
+            auto decllist = visit(decls[decls_i++]).as<ptr_list<var_def_stmt_syntax> >();
+            for(int i = 0; i < decllist.size(); ++i)
+            {
+                result->body.push_back(decllist[i]);
+            }
+        }
+        else if(antlrcpp::is<C1Parser::StmtContext *>(child))
+        {
+            temp.reset(visit(stmts[stmts_i++]).as<stmt_syntax *>());
+            result->body.push_back(temp);
+        }
+    }
+    return static_cast<block_syntax *>(result);
 }
 
 antlrcpp::Any syntax_tree_builder::visitStmt(C1Parser::StmtContext *ctx)
 {
+    auto stmts = ctx->stmt();
+    // lval Assign exp SemiColon
+    if(ctx->lval())
+    {
+        auto result = new assign_stmt_syntax;
+        result->line = ctx->getStart()->getLine();
+        result->pos = ctx->getStart()->getCharPositionInLine();
+        result->target.reset(visit(ctx->lval()).as<lval_syntax *>());
+        result->value.reset(visit(ctx->exp()).as<expr_syntax *>());
+        return static_cast<stmt_syntax *>(result);
+    }
+    // Identifier LeftParen RightParen SemiColon
+    else if(auto identifier = ctx->Identifier())
+    {
+        auto result = new func_call_stmt_syntax;
+        result->line = identifier->getSymbol()->getLine();
+        result->pos = identifier->getSymbol()->getCharPositionInLine();
+        result->name = std::string(identifier->getSymbol()->getText());
+        return static_cast<stmt_syntax *>(result);
+    }
+    // block
+    else if(ctx->block())
+    {
+        block_syntax *result = visit(ctx->block());
+        return static_cast<stmt_syntax *>(result);
+    }
+    // If LeftParen cond RightParen stmt (Else stmt)?
+    else if(ctx->If())
+    {
+        auto result = new if_stmt_syntax;
+        result->line = ctx->getStart()->getLine();
+        result->pos = ctx->getStart()->getCharPositionInLine();
+        result->pred.reset(visit(ctx->cond()).as<cond_syntax *>());
+        result->then_body.reset(visit(stmts[0]).as<stmt_syntax *>());
+        if(ctx->Else())
+            result->else_body.reset(visit(stmts[1]).as<stmt_syntax *>());
+        else
+            result->else_body.reset();
+        return static_cast<stmt_syntax *>(result);
+    }
+    // While LeftParen cond RightParen stmt
+    else if(ctx->While())
+    {
+        auto result = new while_stmt_syntax;
+        result->line = ctx->getStart()->getLine();
+        result->pos = ctx->getStart()->getCharPositionInLine();
+        result->pred.reset(visit(ctx->cond()).as<cond_syntax *>());
+        result->body.reset(visit(stmts[0]).as<stmt_syntax *>());
+        return static_cast<stmt_syntax *>(result);
+    }
+    // Semicolon
+    else
+    {
+    auto result = new empty_stmt_syntax;
+    result->line = ctx->getStart()->getLine();
+    result->pos = ctx->getStart()->getCharPositionInLine();
+    return static_cast<stmt_syntax *>(result);
+    }
 }
 
 antlrcpp::Any syntax_tree_builder::visitLval(C1Parser::LvalContext *ctx)
 {
+    // Identifier | Identifier LeftBracket exp RightBracket;
+    auto result = new lval_syntax;
+    auto identifier = ctx->Identifier();
+    result->line = identifier->getSymbol()->getLine();
+    result->pos = identifier->getSymbol()->getCharPositionInLine();
+    result->name = std::string(identifier->getSymbol()->getText());
+    if(ctx->exp())
+        result->array_index.reset(visit(ctx->exp()).as<expr_syntax *>());
+    else
+        result->array_index.reset();
+    return static_cast<lval_syntax *>(result);
 }
 
 antlrcpp::Any syntax_tree_builder::visitCond(C1Parser::CondContext *ctx)
 {
+    // exp (Equal | NonEqual | Less | Greater | LessEqual | GreaterEqual) exp;
+    auto result = new cond_syntax;
+    result->line = ctx->getStart()->getLine();
+    result->pos = ctx->getStart()->getCharPositionInLine();
+    auto expressions = ctx->exp();
+    result->lhs.reset(visit(expressions[0]).as<expr_syntax *>());
+    if(ctx->Equal())
+        result->op = relop::equal;
+    else if(ctx->NonEqual())
+        result->op = relop::non_equal;
+    else if(ctx->Less())
+        result->op = relop::less;
+    else if(ctx->Greater())
+        result->op = relop::greater;
+    else if(ctx->LessEqual())
+        result->op = relop::less_equal;
+    else if(ctx->GreaterEqual())
+        result->op = relop::greater_equal;
+    result->rhs.reset(visit(expressions[1]).as<expr_syntax *>());
+    return static_cast<cond_syntax *>(result);
 }
 
 // Returns antlrcpp::Any, which is constructable from any type.
@@ -117,6 +407,8 @@ antlrcpp::Any syntax_tree_builder::visitExp(C1Parser::ExpContext *ctx)
             result->number = std::stoi(text, nullptr, 10);
         return static_cast<expr_syntax *>(result);
     }
+    if(ctx->lval())
+        return static_cast<expr_syntax *>(visit(ctx->lval()).as<lval_syntax *>());
 }
 
 ptr<syntax_tree_node> syntax_tree_builder::operator()(antlr4::tree::ParseTree *ctx)

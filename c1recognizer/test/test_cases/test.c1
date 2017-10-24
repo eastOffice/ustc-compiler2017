@@ -1,2 +1,19 @@
-int a = 5
-int b == 4;
+const i = 1;
+const int array[3] = {1,2,3};
+int s1[6];
+int s2[] = {1,2,3,4};
+int s3[3] = {1,2,3};
+void main()
+{
+    int j = 5;
+    if(i == 2)
+        j = 3;
+    else
+        j = 10;
+    while(j < 10)
+    {
+        j = j * 3;
+        if(j == 5)
+            j = j - 1;
+    }
+}

@@ -41,7 +41,7 @@ bool recognizer::execute(error_reporter &_err)
 
     // Change the `exp` to the non-terminal name you want to examine as the top level symbol.
     // It should be `compilationUnit` for final submission.
-    auto tree = parser.exp();
+    auto tree = parser.compilationUnit();
 
     if (listener.get_errors_count() > 0)
         return false;
