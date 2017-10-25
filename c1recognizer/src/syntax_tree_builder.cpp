@@ -9,6 +9,7 @@ syntax_tree_builder::syntax_tree_builder(error_reporter &_err) : err(_err) {}
 
 antlrcpp::Any syntax_tree_builder::visitCompilationUnit(C1Parser::CompilationUnitContext *ctx)
 {
+// (decl | funcdef)+
     auto result = new assembly;
     result->line = 1;
     result->pos = 0;
