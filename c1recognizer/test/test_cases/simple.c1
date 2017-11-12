@@ -1,5 +1,5 @@
-int i = 0;
 void main()
 {
-    i = i+1;
+  output_var = 10;
+  output();
 }
