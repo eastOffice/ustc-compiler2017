@@ -101,6 +101,13 @@ c++ gen_fib.cpp `llvm-config --cxxflags --ldflags --system-libs --libs` -o gen_f
 ./gen_fib
 ```
 
+或者使用已经写好的``Makefile``，直接：
+
+```shell
+make
+./gen_fib
+```
+
 就可以看到输出的 LLVM IR。这个程序的输出结果和上题中自己编写的 IR 完全一样（ 包括变量的命名，bb 的顺序）。
 
 ### 问题处理
@@ -124,7 +131,7 @@ c++ gen_fib.cpp `llvm-config --cxxflags --ldflags --system-libs --libs` -o gen_f
    for (auto &Arg : func_fib->args())
    {   
           //Arg.setName("n");
-          FibArg["n"] = &Arg;
+          FibArg["n"] = &Arg;				// 只有一个参数
     }
    ```
 
