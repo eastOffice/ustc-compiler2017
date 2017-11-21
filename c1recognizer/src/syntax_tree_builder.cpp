@@ -154,8 +154,7 @@ antlrcpp::Any syntax_tree_builder::visitVardef(C1Parser::VardefContext *ctx)
         else
         {
             result->array_length.reset();
-            result->initializers.resize(1);
-            result->initializers[0].reset();
+            result->initializers.clear();
         }
     }
     // Identifier LeftBracket exp RightBracket
