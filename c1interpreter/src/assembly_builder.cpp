@@ -10,11 +10,9 @@ void assembly_builder::visit(assembly &node)
 {
     in_global = true;
     bb_count = 0;
-    if(node.global_defs.size() == 0)
-    {
-        printf("empty assembly.\n");
-        return;
-    }
+    value_result = ConstantInt::get(Type::getInt32Ty(context), 0);
+    const_result = 0;
+    error_flag = false;
     for(auto def : node.global_defs)
     {
         def->accept(*this);
@@ -33,7 +31,7 @@ void assembly_builder::visit(func_def_syntax &node)
         {
             error_flag = true;
             err.error(node.line, node.pos, "duplicate function name.");
-            error_flag = true;
+            return;
         }
     }
     auto func = Function::Create(FunctionType::get(Type::getVoidTy(context), std::vector<Type *>(), false),
@@ -124,7 +122,13 @@ void assembly_builder::visit(unaryop_expr_syntax &node)
 void assembly_builder::visit(lval_syntax &node)
 {
     auto t = lookup_variable(node.name);
-    Value* lval =  std::get<0>(t); // data
+    if(!std::get<0>(t))
+    {
+        err.error(node.line, node.pos, "use of undeclared variable.");
+        error_flag = true;
+        return;
+    }
+    auto lval =  std::get<0>(t); // data
     bool is_const = std::get<1>(t);
     bool is_array = std::get<2>(t);
     if(is_array == false)
@@ -133,6 +137,7 @@ void assembly_builder::visit(lval_syntax &node)
         {
             err.error(node.line, node.pos, "type mismatch.");
             error_flag = true;
+            return;
         }
         if(lval_as_rval == false)
         {
@@ -140,6 +145,7 @@ void assembly_builder::visit(lval_syntax &node)
             {
                 err.error(node.line, node.pos, "const value cannot be a lval.");
                 error_flag = true;
+                return;
             }
             value_result = lval;
         }
@@ -154,6 +160,7 @@ void assembly_builder::visit(lval_syntax &node)
         {
             err.error(node.line, node.pos, "type mismatch.");
             error_flag = true;
+            return;
         }
         std::vector<Value *> index;
         node.array_index->accept(*this);
@@ -171,6 +178,7 @@ void assembly_builder::visit(lval_syntax &node)
             {
                 err.error(node.line, node.pos, "const value cannot be a lval.");
                 error_flag = true;
+                return;
             }
             value_result = element;
         }
@@ -226,12 +234,23 @@ void assembly_builder::visit(var_def_stmt_syntax &node)
             node.array_length->accept(*this);
             int array_len = const_result;
             temp_array_len = const_result;
-            if(temp_array_len <= 0)
+            if(temp_array_len < 0)
             {
                 err.error(node.line, node.pos, "size of an array must be greater than 0.");
                 error_flag = true;
+                return;
+            }
+            if(temp_array_len == 0)
+            {
+                err.warn(node.line, node.pos, "declaring a 0-sized array.");
             }
             int init_len = node.initializers.size();
+            if(init_len > temp_array_len)
+            {
+                err.error(node.line, node.pos, "length of initializer larger than that of array.");
+                error_flag = true;
+                return;
+            }
             for(int i = 0; i < temp_array_len; i++)
             {
                 if(i < init_len)
@@ -258,7 +277,6 @@ void assembly_builder::visit(var_def_stmt_syntax &node)
         // local var
         if(is_array == false)
         {
-            constexpr_expected = node.is_constant;
             var_ptr = builder.CreateAlloca(Type::getInt32Ty(context), nullptr, var_name);
         }
         else
@@ -267,10 +285,15 @@ void assembly_builder::visit(var_def_stmt_syntax &node)
             node.array_length->accept(*this);
             //Value * array_len = ConstantInt::get(Type::getInt32Ty(context), const_result);
             temp_array_len = const_result;
-            if(temp_array_len <= 0)
+            if(temp_array_len < 0)
             {
                 err.error(node.line, node.pos, "size of an array must be greater than 0.");
                 error_flag = true;
+                return;
+            }
+            if(temp_array_len == 0)
+            {
+                err.warn(node.line, node.pos, "declaring a 0-sized array.");
             }
             var_ptr = builder.CreateAlloca(ArrayType::get(Type::getInt32Ty(context), temp_array_len), nullptr, var_name);
         }
@@ -278,10 +301,16 @@ void assembly_builder::visit(var_def_stmt_syntax &node)
     // deal with initialization
     if(in_global == false && node.initializers.size())
     {
+        constexpr_expected = false;
         if(is_array)
         {
             int init_len = node.initializers.size();
-            constexpr_expected = true;
+            if(init_len > temp_array_len)
+            {
+                err.error(node.line, node.pos, "length of initializer larger than that of array.");
+                error_flag = true;
+                return;
+            }
             Value * element;
             std::vector<Value *> index;
             index.push_back((Value *)ConstantInt::get(Type::getInt32Ty(context), 0));
@@ -293,8 +322,9 @@ void assembly_builder::visit(var_def_stmt_syntax &node)
                 if(len < init_len)
                 {
                     node.initializers[len]->accept(*this);
-                    Value * init = ConstantInt::get(Type::getInt32Ty(context), const_result);
+                    Value * init = value_result;
                     builder.CreateStore(init, element);
+                    
                 }
                 else
                 {
@@ -306,20 +336,17 @@ void assembly_builder::visit(var_def_stmt_syntax &node)
         else
         {
             if(node.initializers.size() != 1)
+            {
                 err.error(node.line, node.pos, "more than one initializers to a variable.");
+                error_flag = true;
+                return;
+                // acturally, parser will deal with this.
+            }
             else
             {
                 //printf("initializing variable\n");
                 node.initializers[0]->accept(*this);
-                if(constexpr_expected == true)
-                {
-                    Value * const_int_len = ConstantInt::get(Type::getInt32Ty(context), const_result);
-                    builder.CreateStore(const_int_len, var_ptr);
-                }
-                else
-                {
-                    builder.CreateStore(value_result, var_ptr);
-                }
+                builder.CreateStore(value_result, var_ptr);
             }
         }
     }
@@ -327,12 +354,13 @@ void assembly_builder::visit(var_def_stmt_syntax &node)
     {
         err.error(node.line, node.pos, "var declaration failed.");
         error_flag = true;
+        return;
     }
 }
 
 void assembly_builder::visit(assign_stmt_syntax &node)
 {
-    constexpr_expected = false; // ?
+    constexpr_expected = false;
     lval_as_rval = false;
     node.target->accept(*this);
     auto _target = value_result;
@@ -358,8 +386,9 @@ void assembly_builder::visit(func_call_stmt_syntax &node)
     }
     if(found == 0)
     {
-        err.error(node.line, node.pos, "using an undeclared function.");
+        err.error(node.line, node.pos, "use of undeclared function.");
         error_flag = true;
+        return;
     }
     auto func = functions[func_name];
     builder.CreateCall(func, {});
@@ -367,7 +396,6 @@ void assembly_builder::visit(func_call_stmt_syntax &node)
 
 void assembly_builder::visit(block_syntax &node)
 {
-    //printf("visiting block.\n");
     enter_scope();
     for(auto t : node.body)
     {
