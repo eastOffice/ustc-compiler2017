@@ -2,7 +2,7 @@ parser grammar C1Parser;
 options { tokenVocab = C1Lexer; }
 
 compilationUnit:
-    (decl | funcdef)+;
+    (decl | funcdef)* EOF;
 decl: 
     constdecl | vardecl;
 constdecl: 
@@ -32,8 +32,9 @@ lval:
 cond: 
     exp (Equal | NonEqual | Less | Greater | LessEqual | GreaterEqual) exp;
 exp:
-    exp (Plus | Minus | Multiply | Divide | Modulo) exp
-    | (Plus | Minus) exp
+    (Plus | Minus) exp
+    | exp (Multiply | Divide |Modulo) exp
+    | exp (Plus | Minus) exp
     | LeftParen exp RightParen
     | lval
     | Number
