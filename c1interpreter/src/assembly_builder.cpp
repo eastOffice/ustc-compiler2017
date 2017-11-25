@@ -21,8 +21,6 @@ void assembly_builder::visit(assembly &node)
 
 void assembly_builder::visit(func_def_syntax &node)
 {
-    //printf("visiting func_def.\n");
-    in_global = false;
     auto func_name = node.name;
     // name check
     for(auto t : functions)
@@ -30,7 +28,7 @@ void assembly_builder::visit(func_def_syntax &node)
         if(t.first == func_name)
         {
             error_flag = true;
-            err.error(node.line, node.pos, "duplicate function name.");
+            err.error(node.line, node.pos, "function: " + func_name + " has already been declared.");
             return;
         }
     }
@@ -41,8 +39,10 @@ void assembly_builder::visit(func_def_syntax &node)
     auto func_entry = BasicBlock::Create(context, "entry", func);
     builder.SetInsertPoint(func_entry);
     functions[func_name] = func;
+    in_global = false;
     node.body->accept(*this);
     builder.CreateRetVoid();
+    in_global = true;
 }
 
 void assembly_builder::visit(cond_syntax &node)
@@ -121,10 +121,16 @@ void assembly_builder::visit(unaryop_expr_syntax &node)
 
 void assembly_builder::visit(lval_syntax &node)
 {
+    if(constexpr_expected == true)
+    {
+        err.error(node.line, node.pos, "constant value expected.");
+        error_flag = true;
+        return;
+    }
     auto t = lookup_variable(node.name);
     if(!std::get<0>(t))
     {
-        err.error(node.line, node.pos, "use of undeclared variable.");
+        err.error(node.line, node.pos, "use of undeclared variable : " + node.name);
         error_flag = true;
         return;
     }
@@ -135,7 +141,7 @@ void assembly_builder::visit(lval_syntax &node)
     {
         if(node.array_index)
         {
-            err.error(node.line, node.pos, "type mismatch.");
+            err.error(node.line, node.pos, "type mismatch: expecting a non-array.");
             error_flag = true;
             return;
         }
@@ -158,17 +164,17 @@ void assembly_builder::visit(lval_syntax &node)
     {
         if(!node.array_index)
         {
-            err.error(node.line, node.pos, "type mismatch.");
+            err.error(node.line, node.pos, "type mismatch: expecting an array.");
             error_flag = true;
             return;
         }
         std::vector<Value *> index;
+        int temp_lval = lval_as_rval;
+        lval_as_rval = true;
         node.array_index->accept(*this);
+        lval_as_rval = temp_lval;
         Value * const_int_index;
-        if(constexpr_expected == true)
-            const_int_index = ConstantInt::get(Type::getInt32Ty(context), const_result);
-        else
-            const_int_index = value_result;
+        const_int_index = value_result;
         index.push_back((Value *)ConstantInt::get(Type::getInt32Ty(context), 0));
         index.push_back(const_int_index);
         Value * element = builder.CreateGEP(lval, index);
@@ -212,6 +218,7 @@ void assembly_builder::visit(var_def_stmt_syntax &node)
     if(in_global)
     {
         // global var can only be initialized with a constant
+        //printf("declaring global var: %s\n", node.name.c_str());
         constexpr_expected = true;
         const_result = 0;
         if(is_array == false)
@@ -232,6 +239,7 @@ void assembly_builder::visit(var_def_stmt_syntax &node)
             std::vector<Constant *> init_array;
             Constant * const_int_0 = ConstantInt::get(Type::getInt32Ty(context), 0);
             node.array_length->accept(*this);
+            //if(error_flag == true) return;
             int array_len = const_result;
             temp_array_len = const_result;
             if(temp_array_len < 0)
@@ -352,7 +360,7 @@ void assembly_builder::visit(var_def_stmt_syntax &node)
     }
     if(!declare_variable(var_name, var_ptr, node.is_constant, is_array))
     {
-        err.error(node.line, node.pos, "var declaration failed.");
+        err.error(node.line, node.pos, "variable: " + node.name + " has already been declared.");
         error_flag = true;
         return;
     }
@@ -386,7 +394,7 @@ void assembly_builder::visit(func_call_stmt_syntax &node)
     }
     if(found == 0)
     {
-        err.error(node.line, node.pos, "use of undeclared function.");
+        err.error(node.line, node.pos, "use of undeclared function : " + node.name);
         error_flag = true;
         return;
     }

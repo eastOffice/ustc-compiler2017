@@ -1,0 +1,11 @@
+void foo(){}
+void foo(){}
+const int g = 1;
+const int a[2] = {g};
+int b[2] = {g};
+
+void main()
+{
+  int n = 1;
+  int a[n];
+}
