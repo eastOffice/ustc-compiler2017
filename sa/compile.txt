@@ -1,0 +1,9 @@
+CPU：2.7 GHz Intel Core i5
+内存大小：8 GB 1867 MHz DDR3
+操作系统：macOS High Sierra 10.13.2
+cmake目标：make
+cmake build type：Debug
+编译线程数：4
+编译耗时：40min 28s
+内存占用峰值：3.92G
+编译文件大小：15.29 GB(build)
