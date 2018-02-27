@@ -239,7 +239,6 @@ void assembly_builder::visit(var_def_stmt_syntax &node)
             std::vector<Constant *> init_array;
             Constant * const_int_0 = ConstantInt::get(Type::getInt32Ty(context), 0);
             node.array_length->accept(*this);
-            //if(error_flag == true) return;
             int array_len = const_result;
             temp_array_len = const_result;
             if(temp_array_len < 0)
